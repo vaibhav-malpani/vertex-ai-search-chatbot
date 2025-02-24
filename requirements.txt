@@ -2,3 +2,5 @@ langchain
 chainlit
 langchain-google-vertexai
 langchain-google-community[vertexaisearch]
+gtts
+pydub

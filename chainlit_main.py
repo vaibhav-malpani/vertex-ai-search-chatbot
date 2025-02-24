@@ -6,6 +6,9 @@ from langchain_google_vertexai import VertexAI
 from langchain.memory import ConversationBufferMemory
 from dotenv import load_dotenv
 import os
+from gtts import gTTS
+import re
+from pydub import AudioSegment
 
 load_dotenv()
 
@@ -14,6 +17,7 @@ DATA_STORE_ID = os.getenv('DATA_STORE_ID')
 DATA_STORE_LOCATION = os.getenv('DATA_STORE_LOCATION')
 PROJECT_ID = os.getenv('PROJECT_ID')
 SOURCE = eval(os.getenv("SOURCE"))
+AUDIO = eval(os.getenv("AUDIO"))
 
 
 system_prompt = """
@@ -106,7 +110,7 @@ async def chat_profile(current_user: cl.User):
             starters=[
         cl.Starter(
             label="Leave policy",
-            message="types of leaves and their counts?",
+            message="what are the types of leaves offered?",
             ),
 
         cl.Starter(
@@ -128,6 +132,17 @@ async def chat_profile(current_user: cl.User):
     ]
 
 
+def text_to_speech(text):
+    # Remove special characters except punctuations
+    cleaned_text = re.sub(r'http\S+|www\S+|[^A-Za-z0-9\s.,!?;:]+', '', text)
+
+    tts = gTTS(cleaned_text, lang='en', slow=False)
+    tts.save("answer.mp3")
+    sound = AudioSegment.from_file("answer.mp3")
+    sound = sound.speedup(playback_speed=1.25)
+    sound.export("answer.mp3", format="mp3")
+
+
 @cl.on_message
 async def main(message: cl.Message):
     chain = cl.user_session.get("chain")
@@ -136,9 +151,14 @@ async def main(message: cl.Message):
     )
     cb.answer_reached = True
     res = await chain.acall(message.content, callbacks=[cb])
-    # print(res)
-    # answer = res["result"]
+
     answer = res["answer"]
+    elements = []
+    if AUDIO:
+        answer = res["answer"]
+        text_to_speech(answer)
+        elements.append(cl.Audio(name="answer.mp3", path="./answer.mp3", display="inline"))
+
 
     if SOURCE:
         sources = res["source_documents"]
@@ -155,4 +175,4 @@ async def main(message: cl.Message):
         else:
             answer += "\nNo sources found"
 
-    await cl.Message(content=answer).send()
+    await cl.Message(content=answer, elements=elements).send()
